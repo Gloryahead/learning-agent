@@ -552,10 +552,8 @@ def teach_topic(topic: str) -> str:
             #   4. Receiving the response
             # The `anthropic` library handles all of this for us.
             response = client.messages.create(
-                model="claude-opus-4-6",
-                # Which Claude model to use. claude-opus-4-6 is the most capable.
-                # Think of different models like different "editions" of Claude —
-                # some are faster and cheaper, some are smarter but slower.
+                model="claude-sonnet-4-6",
+                # Sonnet: 85% of Opus quality at 1/3 the price — ideal for lessons.
 
                 max_tokens=8000,
                 # Maximum length of Claude's response.
@@ -683,7 +681,7 @@ def run_quiz(lesson_text: str) -> float:
     #   It's called "structured output" — like filling out a form instead of
     #   writing a free-form essay.
     quiz_extraction = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-haiku-4-5",  # Haiku: simple extraction, 10x cheaper
         max_tokens=1000,    # Questions are short, don't need much space
         messages=[
             {
@@ -782,7 +780,7 @@ def run_quiz(lesson_text: str) -> float:
 
     with console.status("[bold cyan]Evaluating your answers...[/bold cyan]"):
         evaluation = client.messages.create(
-            model="claude-opus-4-6",
+            model="claude-haiku-4-5",  # Haiku: grading is straightforward
             max_tokens=1500,
             messages=[
                 {
@@ -813,7 +811,7 @@ def run_quiz(lesson_text: str) -> float:
     # We ask Claude to read its own feedback and give a number.
     # This is simpler than trying to parse the feedback text ourselves.
     score_response = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-haiku-4-5",
         max_tokens=10,   # We only need a short number like "0.8"
         messages=[
             {
