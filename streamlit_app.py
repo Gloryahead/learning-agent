@@ -221,7 +221,11 @@ def teach_topic(topic: str) -> str:
         response = client.messages.create(
             model="claude-sonnet-4-6",  # Sonnet: 85% of Opus quality at 1/3 the price
             max_tokens=8000,
-            system=LESSON_SYSTEM_PROMPT,
+            system=[{
+                "type": "text",
+                "text": LESSON_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},  # Cache prompt — 90% cheaper on repeat calls
+            }],
             tools=tools,
             messages=messages,
         )
