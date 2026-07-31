@@ -77,22 +77,20 @@ import json      # json = JavaScript Object Notation
                  # Example: {"name": "Alice", "age": 30}
                  # We use it to send/receive data from Claude in a predictable format.
 
-import sqlite3   # sqlite3 = A tiny database engine built into Python.
-                 # A database is like a super-powered spreadsheet that you can
-                 # search and update very quickly.
-                 # We use it to remember which topics you've studied and when.
-
-from datetime import datetime, timedelta
-# datetime = tools for working with dates and times
-# datetime.now() → gives you the current date and time
-# timedelta(days=3) → represents "3 days" as a duration
-# We use these to schedule when to review topics (spaced repetition).
-
 from pathlib import Path
 # Path = a tool for working with file and folder locations.
-# Instead of writing "/home/user/.learning_agent/progress.db" as a raw string,
-# Path lets us build file paths in a safe, cross-platform way.
 # Path.home() finds your home folder regardless of whether you're on Mac/Windows/Linux.
+
+# Import shared code from core.py — the database functions and system prompt
+# live there so both agent.py (terminal) and streamlit_app.py (web) can use them
+# without either one pulling in the other's dependencies.
+from core import (
+    DB_PATH,
+    LESSON_SYSTEM_PROMPT,
+    get_due_reviews,
+    init_db,
+    save_progress,
+)
 
 import anthropic
 # THIS IS THE MAIN TOOL. The `anthropic` library is what lets us talk to Claude.

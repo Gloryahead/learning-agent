@@ -46,9 +46,10 @@ import os
 import anthropic
 import streamlit as st
 
-# Import the database functions and system prompt from our existing agent.py
-# This avoids duplicating code — one source of truth for the DB logic
-from agent import (
+# Import shared code from core.py — a neutral file with no terminal dependencies.
+# We used to import from agent.py but that pulled in Rich (terminal library)
+# which caused a crash on Streamlit Cloud at startup.
+from core import (
     LESSON_SYSTEM_PROMPT,
     DB_PATH,
     get_due_reviews,
