@@ -53,6 +53,7 @@ from core import (
     LESSON_SYSTEM_PROMPT,
     DB_PATH,
     get_due_reviews,
+    get_all_topics,
     save_progress,
 )
 
@@ -441,12 +442,15 @@ def page_home():
             st.session_state.page = "lesson"
             st.rerun()
 
-    # ── Footer ────────────────────────────────────────────────────────────────
+    # ── Library link ─────────────────────────────────────────────────────────
     st.markdown("---")
-    st.caption(
-        f"📚 Learning history saved to `{DB_PATH}`  \n"
-        "Powered by Claude claude-opus-4-6 · Spaced repetition · Active recall"
-    )
+    all_topics = get_all_topics()
+    if all_topics:
+        if st.button(f"📚 My Library ({len(all_topics)} saved lessons)", use_container_width=True):
+            st.session_state.page = "library"
+            st.rerun()
+
+    st.caption("Powered by Claude · Spaced repetition · Active recall")
 
 
 def page_lesson():
@@ -503,7 +507,7 @@ def page_lesson():
         st.rerun()
 
     if col2.button("⏭ Skip quiz", use_container_width=True):
-        save_progress(topic, 0.7)   # Save with neutral score
+        save_progress(topic, 0.7, st.session_state.lesson)
         st.session_state.page = "home"
         st.session_state.lesson = ""
         st.rerun()
@@ -633,7 +637,7 @@ def page_results():
     # on reruns (Streamlit reruns the whole script, so without this guard
     # it would save every time the page renders).
     if not st.session_state.get("progress_saved"):
-        save_progress(topic, score)
+        save_progress(topic, score, st.session_state.lesson)
         st.session_state.progress_saved = True
 
     # ── Actions ───────────────────────────────────────────────────────────────
@@ -652,6 +656,57 @@ def page_results():
         st.session_state.progress_saved = False
         st.session_state.page = "home"
         st.rerun()
+
+
+def page_library():
+    """
+    Shows all saved lessons. The user can re-read any lesson or re-quiz themselves.
+    """
+    if st.button("← Back to home"):
+        st.session_state.page = "home"
+        st.rerun()
+
+    st.title("📚 My Library")
+    st.caption("Every lesson you've completed. Click any topic to re-read or re-quiz.")
+    st.markdown("---")
+
+    all_topics = get_all_topics()
+    if not all_topics:
+        st.info("No lessons saved yet. Learn something first!")
+        return
+
+    for item in all_topics:
+        topic = item["topic"]
+        score = item["score"]
+        review_count = item["review_count"]
+        lesson_text = item["lesson_text"]
+
+        with st.expander(f"**{topic.title()}** — Score: {score:.0%} · Reviewed {review_count}×"):
+            if lesson_text:
+                st.markdown(lesson_text)
+                col1, col2 = st.columns(2)
+                if col1.button("🎯 Re-quiz me", key=f"quiz_{topic}", use_container_width=True):
+                    # Load this lesson into session and jump to quiz
+                    st.session_state.topic = topic
+                    st.session_state.lesson = lesson_text
+                    with st.spinner("Preparing quiz..."):
+                        questions = extract_questions(lesson_text)
+                    st.session_state.questions = questions
+                    st.session_state.page = "quiz"
+                    st.rerun()
+                if col2.button("🔄 Re-teach (fresh)", key=f"reteach_{topic}", use_container_width=True):
+                    # Regenerate the lesson fresh from the web
+                    st.session_state.topic = topic
+                    st.session_state.lesson = ""
+                    st.session_state.page = "lesson"
+                    st.rerun()
+            else:
+                st.info("Lesson text wasn't saved for this topic. Click 'Re-teach' to generate a fresh lesson.")
+                if st.button("🔄 Re-teach", key=f"reteach_{topic}", use_container_width=True):
+                    st.session_state.topic = topic
+                    st.session_state.lesson = ""
+                    st.session_state.page = "lesson"
+                    st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -675,6 +730,8 @@ def main():
         page_quiz()
     elif page == "results":
         page_results()
+    elif page == "library":
+        page_library()
     else:
         # Fallback: unknown page → go home
         st.session_state.page = "home"

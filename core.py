@@ -11,10 +11,11 @@ The fix: move the code that BOTH files need into this neutral file that has
 no terminal-specific dependencies. Then each app imports from here instead.
 
 WHAT'S IN HERE:
-  - DB_PATH         the path to the SQLite database file
-  - init_db()       creates the database/table if needed
-  - save_progress() saves a quiz result + schedules next spaced review
+  - DB_PATH           the path to the SQLite database file
+  - init_db()         creates the database/table if needed
+  - save_progress()   saves a quiz result + lesson text + schedules next review
   - get_due_reviews() finds topics overdue for review
+  - get_all_topics()  returns every saved topic (for the library page)
   - LESSON_SYSTEM_PROMPT  Claude's teaching instructions
 """
 
@@ -30,7 +31,9 @@ DB_PATH = Path.home() / ".learning_agent" / "progress.db"
 
 
 def init_db():
-    """Creates the database file and learned_topics table if they don't exist."""
+    """Creates the database file and learned_topics table if they don't exist.
+    Also migrates older databases by adding the lesson_text column if missing.
+    """
     DB_PATH.parent.mkdir(exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
@@ -40,19 +43,29 @@ def init_db():
             learned_at   TEXT NOT NULL,
             next_review  TEXT NOT NULL,
             review_count INTEGER DEFAULT 0,
-            quiz_score   REAL DEFAULT 0.0
+            quiz_score   REAL DEFAULT 0.0,
+            lesson_text  TEXT DEFAULT ''
         )
     """)
+    # Migration: add lesson_text column to databases created before this feature.
+    # ALTER TABLE fails silently if the column already exists — that's intentional.
+    try:
+        conn.execute("ALTER TABLE learned_topics ADD COLUMN lesson_text TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists — nothing to do
     conn.commit()
     return conn
 
 
-def save_progress(topic: str, quiz_score: float):
+def save_progress(topic: str, quiz_score: float, lesson_text: str = ""):
     """
-    Saves quiz result and calculates the next spaced repetition review date.
+    Saves quiz result, lesson text, and calculates the next spaced repetition date.
 
     Schedule: 1 day → 3 days → 7 days → 14 days → 30 days → 60 days
     Each time you review, the gap grows — based on Ebbinghaus's forgetting curve.
+
+    lesson_text is stored so the user can re-read the lesson any time without
+    paying for Claude to regenerate it.
     """
     conn = init_db()
 
@@ -71,16 +84,17 @@ def save_progress(topic: str, quiz_score: float):
         next_review = now + timedelta(days=next_interval)
         conn.execute(
             """UPDATE learned_topics
-               SET learned_at=?, next_review=?, review_count=review_count+1, quiz_score=?
+               SET learned_at=?, next_review=?, review_count=review_count+1,
+                   quiz_score=?, lesson_text=?
                WHERE id=?""",
-            (now.isoformat(), next_review.isoformat(), quiz_score, topic_id),
+            (now.isoformat(), next_review.isoformat(), quiz_score, lesson_text, topic_id),
         )
     else:
         next_review = now + timedelta(days=1)
         conn.execute(
-            """INSERT INTO learned_topics (topic, learned_at, next_review, quiz_score)
-               VALUES (?, ?, ?, ?)""",
-            (topic.lower(), now.isoformat(), next_review.isoformat(), quiz_score),
+            """INSERT INTO learned_topics (topic, learned_at, next_review, quiz_score, lesson_text)
+               VALUES (?, ?, ?, ?, ?)""",
+            (topic.lower(), now.isoformat(), next_review.isoformat(), quiz_score, lesson_text),
         )
 
     conn.commit()
@@ -100,6 +114,28 @@ def get_due_reviews() -> list[dict]:
     conn.close()
     return [
         {"topic": r[0], "next_review": r[1], "review_count": r[2], "score": r[3]}
+        for r in rows
+    ]
+
+
+def get_all_topics() -> list[dict]:
+    """Returns every saved topic, newest first — for the library page."""
+    conn = init_db()
+    rows = conn.execute(
+        """SELECT topic, learned_at, next_review, review_count, quiz_score, lesson_text
+           FROM learned_topics
+           ORDER BY learned_at DESC""",
+    ).fetchall()
+    conn.close()
+    return [
+        {
+            "topic": r[0],
+            "learned_at": r[1],
+            "next_review": r[2],
+            "review_count": r[3],
+            "score": r[4],
+            "lesson_text": r[5],
+        }
         for r in rows
     ]
 
