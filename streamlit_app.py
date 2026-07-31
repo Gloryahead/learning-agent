@@ -49,13 +49,8 @@ import streamlit as st
 # Import shared code from core.py — a neutral file with no terminal dependencies.
 # We used to import from agent.py but that pulled in Rich (terminal library)
 # which caused a crash on Streamlit Cloud at startup.
-from core import (
-    LESSON_SYSTEM_PROMPT,
-    DB_PATH,
-    get_due_reviews,
-    get_all_topics,
-    save_progress,
-)
+from core import LESSON_SYSTEM_PROMPT
+from supabase_db import get_due_reviews, get_all_topics, save_progress
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -450,7 +445,7 @@ def page_home():
             st.session_state.page = "library"
             st.rerun()
 
-    st.caption("Powered by Claude · Spaced repetition · Active recall")
+    st.caption("Powered by Claude · Supabase · Spaced repetition · Active recall")
 
 
 def page_lesson():
