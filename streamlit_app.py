@@ -223,9 +223,8 @@ def teach_topic(topic: str) -> str:
 
     for _ in range(max_iterations):
         response = client.messages.create(
-            model="claude-opus-4-6",
+            model="claude-sonnet-4-6",  # Sonnet: 85% of Opus quality at 1/3 the price
             max_tokens=8000,
-            thinking={"type": "adaptive"},  # Claude reasons before answering
             system=LESSON_SYSTEM_PROMPT,
             tools=tools,
             messages=messages,
@@ -258,7 +257,7 @@ def extract_questions(lesson_text: str) -> list[dict]:
     client = get_client()
 
     response = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-haiku-4-5",  # Haiku: simple extraction task, 10x cheaper
         max_tokens=800,
         messages=[
             {
@@ -314,7 +313,7 @@ def grade_answers(lesson_text: str, questions: list[dict], answers: list[str]) -
 
     # Ask Claude to grade and give feedback
     feedback_resp = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-haiku-4-5",  # Haiku: grading is straightforward, no need for Opus
         max_tokens=1500,
         messages=[
             {
@@ -335,7 +334,7 @@ def grade_answers(lesson_text: str, questions: list[dict], answers: list[str]) -
 
     # Ask Claude to turn that feedback into a single number
     score_resp = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-haiku-4-5",
         max_tokens=10,
         messages=[
             {
