@@ -1,0 +1,6 @@
+# Never commit these — they contain secrets or are auto-generated
+.streamlit/secrets.toml
+venv/
+__pycache__/
+*.pyc
+.env
