@@ -3,7 +3,7 @@
 
 [server]
 # Don't open the browser automatically (we'll open it ourselves)
-headless = false
+headless = true
 
 [theme]
 # Color scheme — dark purple/blue to match the "brain learning" feel
