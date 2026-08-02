@@ -250,20 +250,22 @@ def teach_topic(topic: str) -> str:
 
 def extract_questions(lesson_text: str) -> list[dict]:
     """
-    Asks Claude to pull the 3 quiz questions out of the lesson.
-    Uses structured output (JSON schema) so we always get a reliable format.
-    Returns a list like: [{"q": "What is X?"}, {"q": "How does Y work?"}]
+    Pulls the 5 quiz questions out of the lesson.
+    Uses structured output so we always get a reliable format.
+    Returns a list like: [{"q": "What is X?"}, ...]
+    Answers are intentionally NOT extracted — grading uses the full lesson text.
     """
     client = get_client()
 
     response = client.messages.create(
-        model="claude-haiku-4-5",  # Haiku: simple extraction task, 10x cheaper
+        model="claude-haiku-4-5",
         max_tokens=800,
         messages=[
             {
                 "role": "user",
                 "content": (
-                    "From this lesson, extract ONLY the 3 quiz questions (no answers).\n\n"
+                    "From this lesson, extract ONLY the quiz questions (no answers, no hints).\n"
+                    "Return only the question text itself, nothing else.\n\n"
                     f"Lesson:\n{lesson_text}"
                 ),
             }
@@ -296,6 +298,67 @@ def extract_questions(lesson_text: str) -> list[dict]:
         return data.get("questions", [])
     except (json.JSONDecodeError, IndexError, AttributeError):
         return []
+
+
+def generate_anki_export(topic: str, lesson_text: str, questions: list[dict]) -> str:
+    """
+    Generates flashcard content in Anki's tab-separated import format.
+    Each line: front TAB back TAB tags
+    The user imports this .txt file into Anki (File → Import) for free.
+    Also generates answer text using Claude so each card has a proper back.
+    """
+    client = get_client()
+
+    q_list = "\n".join(f"Q{i+1}: {q['q']}" for i, q in enumerate(questions))
+
+    response = client.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=1000,
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    f"Based on this lesson about {topic}:\n\n{lesson_text}\n\n"
+                    f"For each question below, write a concise 1-2 sentence answer "
+                    f"suitable for an Anki flashcard back. Be specific and accurate.\n\n"
+                    f"{q_list}\n\n"
+                    "Return JSON: {\"answers\": [\"answer1\", \"answer2\", ...]}"
+                ),
+            }
+        ],
+        output_config={
+            "format": {
+                "type": "json_schema",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "answers": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        }
+                    },
+                    "required": ["answers"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+    )
+
+    try:
+        data = json.loads(response.content[0].text)
+        answers = data.get("answers", [])
+    except Exception:
+        answers = ["See lesson for answer."] * len(questions)
+
+    # Build Anki tab-separated format: front\tback\ttags
+    tag = topic.lower().replace(" ", "_")
+    lines = []
+    for i, q in enumerate(questions):
+        front = q["q"].replace("\t", " ")
+        back = answers[i].replace("\t", " ") if i < len(answers) else "See lesson."
+        lines.append(f"{front}\t{back}\tlearning_agent {tag}")
+
+    return "\n".join(lines)
 
 
 def grade_answers(lesson_text: str, questions: list[dict], answers: list[str]) -> tuple[str, float]:
@@ -482,9 +545,15 @@ def page_lesson():
             status.update(label="✅ Lesson ready!", state="complete", expanded=False)
             # status.update() changes the spinner to a checkmark when done
 
-    # ── Display the lesson ────────────────────────────────────────────────────
-    # st.markdown() renders markdown text with headers, code blocks, bold, etc.
-    st.markdown(st.session_state.lesson)
+    # ── Display the lesson (hide the quiz section so answers aren't visible) ──
+    lesson_display = st.session_state.lesson
+    # Strip from the quiz section header onward — answers live there
+    for marker in ["## 🧠 Quick Quiz", "## 🧠Quick Quiz", "**Q1:**"]:
+        idx = lesson_display.find(marker)
+        if idx != -1:
+            lesson_display = lesson_display[:idx]
+            break
+    st.markdown(lesson_display)
 
     # ── Quiz prompt ───────────────────────────────────────────────────────────
     st.markdown("---")
@@ -639,7 +708,35 @@ def page_results():
         save_progress(topic, score, st.session_state.lesson)
         st.session_state.progress_saved = True
 
-    # ── Actions ───────────────────────────────────────────────────────────────
+    # ── Export to Anki ────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🃏 Export Flashcards")
+    st.caption(
+        "Export these questions as flashcards you can import into **Anki** (free desktop app) "
+        "or any app that supports tab-separated text (Quizlet, Mochi, RemNote)."
+    )
+
+    if st.button("⬇️ Generate Anki flashcards", use_container_width=True):
+        with st.spinner("Creating flashcards..."):
+            anki_text = generate_anki_export(
+                topic, st.session_state.lesson, st.session_state.questions
+            )
+        st.download_button(
+            label="📥 Download flashcards.txt",
+            data=anki_text,
+            file_name=f"{topic.lower().replace(' ', '_')}_flashcards.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+        st.info(
+            "**How to import into Anki (free):**\n"
+            "1. Install Anki from apps.ankiweb.net\n"
+            "2. File → Import → select the downloaded .txt file\n"
+            "3. Set separator to Tab, check 'Allow HTML in fields'\n"
+            "4. Done — your flashcards are ready with spaced repetition!"
+        )
+
+    # ── Navigation ────────────────────────────────────────────────────────────
     st.markdown("---")
     col1, col2 = st.columns(2)
 
@@ -648,7 +745,6 @@ def page_results():
         st.rerun()
 
     if col2.button("🚀 Learn another topic", type="primary", use_container_width=True):
-        # Reset all session state for the next topic
         for key in ["topic", "lesson", "questions", "answers", "feedback", "progress_saved"]:
             st.session_state[key] = "" if isinstance(st.session_state.get(key), str) else []
         st.session_state.score = 0.0

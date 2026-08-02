@@ -174,16 +174,15 @@ Keep it short (under 20 lines). Add inline comments explaining the "why", not ju
 2-3 mistakes beginners make with this topic. Keep it brief.
 
 ## 🧠 Quick Quiz (Active Recall)
-Generate EXACTLY 3 quiz questions to test understanding. Format them as:
+Generate EXACTLY 5 quiz questions to test understanding.
+List ONLY the questions — do NOT include answers here.
+Format them exactly like this:
 
 **Q1:** [question]
-**A1:** [answer — hidden, only reveal if asked]
-
 **Q2:** [question]
-**A2:** [answer — hidden, only reveal if asked]
-
 **Q3:** [question]
-**A3:** [answer — hidden, only reveal if asked]
+**Q4:** [question]
+**Q5:** [question]
 
 ## 🚀 What to Learn Next
 2-3 related topics that naturally follow this one (for interleaving).
